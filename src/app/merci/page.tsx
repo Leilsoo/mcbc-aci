@@ -1,0 +1,16 @@
+// src/app/merci/page.tsx
+/**
+ * Page de remerciement simple
+ * - Affichée après un envoi réussi
+ */
+export default function MerciPage() {
+  return (
+    <section className="card mx-auto max-w-xl text-center">
+      <h1 className="text-2xl font-bold">Merci !</h1>
+      <p className="mt-2 text-sm text-foreground/80">
+        Votre message a bien été envoyé. Nous revenons vers vous très vite.
+      </p>
+      <a href="/" className="btn-secondary mt-4 inline-block">Retour à l’accueil</a>
+    </section>
+  );
+}

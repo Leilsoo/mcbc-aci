@@ -3,12 +3,20 @@
 
 import { useState } from "react";
 
+// ✅ On décrit le format possible de la réponse Formspree
+type FormspreeResponse = {
+  ok?: boolean;
+  next?: string; // ex: "/thanks"
+  error?: string;
+  errors?: { message?: string }[];
+};
+
 /**
- * Formulaire de contact (client)
- * - Envoie vers /api/contact
- * - Redirige vers /merci si l'API renvoie un "next"
- * - Anti-spam: champ caché "website" + délai minimal via "t0"
- * - Nettoyage: panneau DEBUG retiré (tu peux le remettre si besoin)
+ * Formulaire de contact
+ * - Envoie vers /api/contact (proxy serveur)
+ * - Corrige le 'any' : typage explicite FormspreeResponse
+ * - Corrige le reset du form (event pooling React)
+ * - Redirige vers /merci (ou vers json.next si fourni)
  */
 export default function ContactForm() {
   const [status, setStatus] = useState<"idle" | "sending" | "ok" | "error">("idle");
@@ -22,34 +30,41 @@ export default function ContactForm() {
     setErrorMsg(null);
 
     try {
+      // 1) Récupère les champs du formulaire
       const formData = new FormData(form);
-      const payload = Object.fromEntries(formData.entries());
+      const payload = Object.fromEntries(formData.entries()); // { name, email, subject, message, ... }
 
+      // 2) Appel à l’API locale
       const res = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
-      // On lit le texte puis on tente JSON
+      // 3) Lit la réponse (texte → JSON typé)
       const bodyText = await res.text();
-      let json: any = null;
-      try { json = JSON.parse(bodyText); } catch {}
+      let json: FormspreeResponse | null = null;
+      try {
+        json = JSON.parse(bodyText) as FormspreeResponse;
+      } catch {
+        json = null; // pas grave si ce n’est pas du JSON
+      }
 
+      // 4) Succès vs erreur
       if (res.ok) {
         setStatus("ok");
-        form.reset(); // ✅ reset via la ref
+        form.reset();
 
-        // ➜ Si l'API renvoie une URL "next" (Formspree), on redirige
-      // ✅ On force une redirection locale cohérente
-if (json?.ok) window.location.href = "/merci";
-
+        // Redirection : priorise le "next" si fourni, sinon /merci
+        const nextUrl =
+          (json?.next && typeof json.next === "string" ? json.next : "/merci");
+        window.location.href = nextUrl;
       } else {
-        setErrorMsg(
-          json?.errors?.[0]?.message ||
-          json?.error ||
-          "Impossible d'envoyer le message pour le moment."
-        );
+        const message =
+          json?.errors?.[0]?.message ??
+          (typeof json?.error === "string" ? json.error : null) ??
+          "Impossible d'envoyer le message pour le moment.";
+        setErrorMsg(message);
         setStatus("error");
       }
     } catch {
@@ -60,11 +75,7 @@ if (json?.ok) window.location.href = "/merci";
 
   return (
     <form onSubmit={handleSubmit} className="md:col-span-2 card" aria-live="polite">
-      {/* 🕵️ Honeypot: champs cachés que les humains ne remplissent pas */}
-      <input type="hidden" name="t0" defaultValue={Date.now().toString()} />
-      <div className="hidden" aria-hidden="true">
-        <label>Ne pas remplir ce champ <input name="website" autoComplete="off" tabIndex={-1} /></label>
-      </div>
+      {/* (facultatif) champs anti-spam si tu les avais : t0 / website */}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>

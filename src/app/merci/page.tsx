@@ -1,8 +1,7 @@
 // src/app/merci/page.tsx
-/**
- * Page de remerciement simple
- * - Affichée après un envoi réussi
- */
+// ✅ Page de remerciement (utilise next/link au lieu de <a> pour un lien interne)
+import Link from "next/link";
+
 export default function MerciPage() {
   return (
     <section className="card mx-auto max-w-xl text-center">
@@ -10,7 +9,10 @@ export default function MerciPage() {
       <p className="mt-2 text-sm text-foreground/80">
         Votre message a bien été envoyé. Nous revenons vers vous très vite.
       </p>
-      <a href="/" className="btn-secondary mt-4 inline-block">Retour à l’accueil</a>
+      {/* ✅ Link interne Next.js */}
+      <Link href="/" className="btn-secondary mt-4 inline-block">
+        Retour à l’accueil
+      </Link>
     </section>
   );
 }

@@ -2,29 +2,34 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation"; // ✅ pour rediriger proprement en client
 
-// ✅ On décrit le format possible de la réponse Formspree
+// ✅ Format de réponse possible (utile si tu veux lire des erreurs renvoyées)
 type FormspreeResponse = {
   ok?: boolean;
-  next?: string; // ex: "/thanks"
+  next?: string;
   error?: string;
   errors?: { message?: string }[];
 };
 
 /**
  * Formulaire de contact
- * - Envoie vers /api/contact (proxy serveur)
- * - Corrige le 'any' : typage explicite FormspreeResponse
- * - Corrige le reset du form (event pooling React)
- * - Redirige vers /merci (ou vers json.next si fourni)
+ * - Envoie vers /api/contact (proxy serveur -> Formspree)
+ * - Corrige l’event pooling (on stocke la ref du <form>)
+ * - ✅ Redirection forcée vers /merci (au lieu d’utiliser json.next)
  */
 export default function ContactForm() {
+  const router = useRouter(); // ✅ pour router.push('/merci')
+
+  // 🧠 États d’UI
   const [status, setStatus] = useState<"idle" | "sending" | "ok" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const form = e.currentTarget; // ⚠️ garder la ref avant tout await
+
+    // ⚠️ Important : garder la ref du <form> avant tout await (sinon event pooling React)
+    const form = e.currentTarget;
 
     setStatus("sending");
     setErrorMsg(null);
@@ -32,42 +37,41 @@ export default function ContactForm() {
     try {
       // 1) Récupère les champs du formulaire
       const formData = new FormData(form);
-      const payload = Object.fromEntries(formData.entries()); // { name, email, subject, message, ... }
+      const payload = Object.fromEntries(formData.entries()); // { name, email, subject, message }
 
-      // 2) Appel à l’API locale
+      // 2) Appel à notre API locale (même origine -> pas de CORS)
       const res = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
-      // 3) Lit la réponse (texte → JSON typé)
+      // 3) Lecture tolérante de la réponse (texte -> JSON typé si possible)
       const bodyText = await res.text();
       let json: FormspreeResponse | null = null;
       try {
         json = JSON.parse(bodyText) as FormspreeResponse;
       } catch {
-        json = null; // pas grave si ce n’est pas du JSON
+        json = null; // pas bloquant si ce n’est pas du JSON
       }
 
-      // 4) Succès vs erreur
+      // 4) Gestion succès/erreur
       if (res.ok) {
         setStatus("ok");
-        form.reset();
-
-        // Redirection : priorise le "next" si fourni, sinon /merci
-        const nextUrl =
-          (json?.next && typeof json.next === "string" ? json.next : "/merci");
-        window.location.href = nextUrl;
-      } else {
-        const message =
-          json?.errors?.[0]?.message ??
-          (typeof json?.error === "string" ? json.error : null) ??
-          "Impossible d'envoyer le message pour le moment.";
-        setErrorMsg(message);
-        setStatus("error");
+        form.reset();              // ✅ reset avec la ref
+        router.push("/merci");     // ✅ redirection FORCÉE vers /merci (plus de /thanks)
+        return;
       }
+
+      // ❌ Cas erreur : on affiche un message utile
+      const message =
+        json?.errors?.[0]?.message ??
+        (typeof json?.error === "string" ? json.error : null) ??
+        "Impossible d'envoyer le message pour le moment.";
+      setErrorMsg(message);
+      setStatus("error");
     } catch {
+      // ❌ Erreur réseau (ou autre exception inattendue)
       setErrorMsg("Erreur réseau. Vérifiez votre connexion.");
       setStatus("error");
     }
@@ -75,8 +79,6 @@ export default function ContactForm() {
 
   return (
     <form onSubmit={handleSubmit} className="md:col-span-2 card" aria-live="polite">
-      {/* (facultatif) champs anti-spam si tu les avais : t0 / website */}
-
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="name" className="text-sm font-medium">Nom</label>
